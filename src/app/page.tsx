@@ -111,7 +111,7 @@ export default function HomePage() {
               >
                 {loading ? "Working..." : "Import Notes"}
               </button>
-              <UserButton afterSignOutUrl="/" />
+              <UserButton />
               </>
             )}
           </div>
