@@ -24,6 +24,8 @@ export default function HomePage() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [result, setResult] = useState<AskResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -87,6 +89,50 @@ export default function HomePage() {
       await refreshIntegrations();
     } else {
       setStatus(`Save note failed: ${data.error}`);
+    }
+    setLoading(false);
+  }
+
+  async function uploadSelectedFiles() {
+    if (!uploadFiles?.length) return;
+    setLoading(true);
+    setStatus("Uploading files...");
+
+    const form = new FormData();
+    Array.from(uploadFiles).forEach((file) => form.append("files", file));
+
+    const res = await fetch("/api/integrations/upload", {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const rejected = Array.isArray(data.rejected) && data.rejected.length ? `, skipped ${data.rejected.length}` : "";
+      setStatus(`Uploaded ${data.uploaded} files (${data.chunks} chunks${rejected})`);
+      setUploadFiles(null);
+      await refreshIntegrations();
+    } else {
+      setStatus(`Upload failed: ${data.error}`);
+    }
+    setLoading(false);
+  }
+
+  async function addYouTubeTranscript() {
+    if (!youtubeUrl.trim()) return;
+    setLoading(true);
+    setStatus("Fetching YouTube transcript...");
+    const res = await fetch("/api/integrations/youtube", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: youtubeUrl }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setYoutubeUrl("");
+      setStatus(`YouTube transcript imported (${data.chunks} chunks)`);
+      await refreshIntegrations();
+    } else {
+      setStatus(`YouTube import failed: ${data.error}`);
     }
     setLoading(false);
   }
@@ -182,6 +228,46 @@ export default function HomePage() {
               disabled={loading || !isSignedIn || !noteContent.trim()}
             >
               Save Note
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <label className="mb-2 block text-sm font-medium text-slate-700">Upload study files</label>
+          <p className="mb-2 text-xs text-slate-500">Supports .txt, .md, .csv, .json</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="file"
+              multiple
+              accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+              onChange={(e) => setUploadFiles(e.target.files)}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            />
+            <button
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={uploadSelectedFiles}
+              disabled={loading || !isSignedIn || !uploadFiles?.length}
+            >
+              Upload Files
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <label className="mb-2 block text-sm font-medium text-slate-700">Import YouTube transcript</label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-900 outline-none ring-indigo-200 placeholder:text-slate-400 focus:ring-2"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+            />
+            <button
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={addYouTubeTranscript}
+              disabled={loading || !isSignedIn || !youtubeUrl.trim()}
+            >
+              Import Video
             </button>
           </div>
         </div>
