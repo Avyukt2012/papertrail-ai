@@ -4,6 +4,7 @@ const isProtectedRoute = createRouteMatcher([
   "/",
   "/api/ask(.*)",
   "/api/ingest(.*)",
+  "/api/integrations(.*)",
   "/api/notion(.*)",
 ]);
 

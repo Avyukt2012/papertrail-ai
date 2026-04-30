@@ -5,13 +5,25 @@ export type MemoryChunk = {
   text: string;
 };
 
+export type ManualNote = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+};
+
 const chunksByUser = new Map<string, MemoryChunk[]>();
 const notionTokenByUser = new Map<string, string>();
+const manualNotesByUser = new Map<string, ManualNote[]>();
 
 export function addChunks(userId: string, next: MemoryChunk[]) {
   const current = chunksByUser.get(userId) ?? [];
   current.push(...next);
   chunksByUser.set(userId, current);
+}
+
+export function setChunks(userId: string, next: MemoryChunk[]) {
+  chunksByUser.set(userId, next);
 }
 
 export function getChunks(userId: string) {
@@ -28,4 +40,21 @@ export function setNotionToken(userId: string, token: string) {
 
 export function getNotionToken(userId: string) {
   return notionTokenByUser.get(userId) ?? null;
+}
+
+export function addManualNote(userId: string, title: string, content: string): ManualNote {
+  const current = manualNotesByUser.get(userId) ?? [];
+  const note: ManualNote = {
+    id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: title.trim() || "Untitled note",
+    content: content.trim(),
+    createdAt: Date.now(),
+  };
+  current.unshift(note);
+  manualNotesByUser.set(userId, current);
+  return note;
+}
+
+export function getManualNotes(userId: string) {
+  return manualNotesByUser.get(userId) ?? [];
 }

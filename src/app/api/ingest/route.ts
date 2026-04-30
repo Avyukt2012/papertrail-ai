@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { chunkText } from "@/lib/chunk";
 import { fetchNotionPages } from "@/lib/notion";
-import { addChunks, clearChunks, getNotionToken, type MemoryChunk } from "@/lib/store";
+import {
+  getManualNotes,
+  getNotionToken,
+  setChunks,
+  type MemoryChunk,
+} from "@/lib/store";
 
 export async function POST() {
   try {
@@ -12,37 +17,52 @@ export async function POST() {
     }
 
     const notionToken = getNotionToken(userId);
-    if (!notionToken) {
-      return NextResponse.json(
-        { ok: false, error: "Notion is not connected. Click Connect Notion first." },
-        { status: 400 }
-      );
-    }
-
-    const docs = await fetchNotionPages(notionToken, 200);
-    clearChunks(userId);
-
+    const notionDocs = notionToken ? await fetchNotionPages(notionToken, 200) : [];
+    const manualNotes = getManualNotes(userId);
     const allChunks: MemoryChunk[] = [];
 
-    for (const doc of docs) {
+    for (const doc of notionDocs) {
       const chunks = chunkText(doc.content);
       for (let i = 0; i < chunks.length; i += 1) {
         const text = chunks[i];
         allChunks.push({
-          id: `${doc.id}-${i}`,
-          sourceTitle: doc.title,
+          id: `notion-${doc.id}-${i}`,
+          sourceTitle: `${doc.title} (Notion)`,
           sourceUrl: doc.url,
           text,
         });
       }
     }
 
-    addChunks(userId, allChunks);
+    for (const note of manualNotes) {
+      const chunks = chunkText(note.content);
+      for (let i = 0; i < chunks.length; i += 1) {
+        allChunks.push({
+          id: `manual-${note.id}-${i}`,
+          sourceTitle: `${note.title} (Manual Note)`,
+          sourceUrl: `manual://note/${note.id}`,
+          text: chunks[i],
+        });
+      }
+    }
+
+    if (!allChunks.length) {
+      return NextResponse.json(
+        { ok: false, error: "No connected sources or notes to ingest yet." },
+        { status: 400 }
+      );
+    }
+
+    setChunks(userId, allChunks);
 
     return NextResponse.json({
       ok: true,
-      pages: docs.length,
+      pages: notionDocs.length + manualNotes.length,
       chunks: allChunks.length,
+      sources: {
+        notionPages: notionDocs.length,
+        manualNotes: manualNotes.length,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

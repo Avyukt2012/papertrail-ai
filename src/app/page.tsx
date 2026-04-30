@@ -10,23 +10,43 @@ type AskResult = {
   citations: Array<{ id: number; title: string; url: string; snippet: string }>;
 };
 
+type IntegrationStatus = {
+  id: string;
+  name: string;
+  connected: boolean;
+  itemCount: number;
+};
+
 export default function HomePage() {
   const { isLoaded, isSignedIn } = useAuth();
   const [status, setStatus] = useState("Ready to analyze your notes");
   const [question, setQuestion] = useState("");
-  const [notionConnected, setNotionConnected] = useState(false);
+  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
   const [result, setResult] = useState<AskResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function loadNotionStatus() {
+    async function loadIntegrations() {
       if (!isLoaded || !isSignedIn) return;
-      const res = await fetch("/api/notion/status");
+      const res = await fetch("/api/integrations/status");
       const data = await res.json();
-      if (data.ok) setNotionConnected(Boolean(data.connected));
+      if (data.ok) setIntegrations(data.integrations ?? []);
     }
-    void loadNotionStatus();
+    void loadIntegrations();
   }, [isLoaded, isSignedIn]);
+
+  const notionConnected = integrations.find((i) => i.id === "notion")?.connected ?? false;
+  const manualCount = integrations.find((i) => i.id === "manual")?.itemCount ?? 0;
+  const hasAnySource = notionConnected || manualCount > 0;
+
+  async function refreshIntegrations() {
+    if (!isSignedIn) return;
+    const res = await fetch("/api/integrations/status");
+    const data = await res.json();
+    if (data.ok) setIntegrations(data.integrations ?? []);
+  }
 
   async function connectNotion() {
     window.location.href = "/api/notion/connect?returnTo=/";
@@ -34,15 +54,39 @@ export default function HomePage() {
 
   async function ingest() {
     setLoading(true);
-    setStatus("Importing research notes from Notion...");
+    setStatus("Indexing connected sources...");
     setResult(null);
 
     const res = await fetch("/api/ingest", { method: "POST" });
     const data = await res.json();
     if (data.ok) {
-      setStatus(`Import complete: ${data.pages} notes, ${data.chunks} chunks indexed`);
+      setStatus(`Index complete: ${data.pages} documents, ${data.chunks} chunks indexed`);
     } else {
       setStatus(`Ingest failed: ${data.error}`);
+    }
+    setLoading(false);
+  }
+
+  async function addManualNote() {
+    if (!noteContent.trim()) return;
+    setLoading(true);
+    setStatus("Saving manual note...");
+    const res = await fetch("/api/integrations/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: noteTitle,
+        content: noteContent,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setNoteTitle("");
+      setNoteContent("");
+      setStatus(`Note saved and indexed (${data.chunks} chunks)`);
+      await refreshIntegrations();
+    } else {
+      setStatus(`Save note failed: ${data.error}`);
     }
     setLoading(false);
   }
@@ -80,7 +124,7 @@ export default function HomePage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
-              Research Assistant
+              Research and Study Assistant
             </p>
             <h1 className="mt-2 text-3xl font-bold text-slate-900">PaperTrail AI</h1>
             <p className="mt-2 text-sm text-slate-600">
@@ -107,9 +151,9 @@ export default function HomePage() {
               <button
                 className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={ingest}
-                disabled={loading || !notionConnected}
+                disabled={loading || !hasAnySource}
               >
-                {loading ? "Working..." : "Import Notes"}
+                {loading ? "Working..." : "Index Sources"}
               </button>
               <UserButton />
               </>
@@ -118,6 +162,31 @@ export default function HomePage() {
         </div>
 
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+          <label className="mb-2 block text-sm font-medium text-slate-700">Add manual study/research note</label>
+          <div className="grid gap-2">
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-900 outline-none ring-indigo-200 placeholder:text-slate-400 focus:ring-2"
+              placeholder="Optional title (e.g., Biology Chapter 4)"
+              value={noteTitle}
+              onChange={(e) => setNoteTitle(e.target.value)}
+            />
+            <textarea
+              className="min-h-28 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-slate-900 outline-none ring-indigo-200 placeholder:text-slate-400 focus:ring-2"
+              placeholder="Paste your notes, highlights, formulas, summaries..."
+              value={noteContent}
+              onChange={(e) => setNoteContent(e.target.value)}
+            />
+            <button
+              className="justify-self-start rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={addManualNote}
+              disabled={loading || !isSignedIn || !noteContent.trim()}
+            >
+              Save Note
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
           <label className="mb-2 block text-sm font-medium text-slate-700">Ask a research question</label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -141,9 +210,9 @@ export default function HomePage() {
             Status: <span className="font-medium text-slate-900">{status}</span>
           </p>
           <p className="text-xs text-slate-600">
-            Notion:{" "}
-            <span className={notionConnected ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
-              {notionConnected ? "Connected" : "Not connected"}
+            Sources:{" "}
+            <span className="font-semibold text-slate-800">
+              Notion {notionConnected ? "connected" : "optional"} • Manual notes {manualCount}
             </span>
           </p>
         </div>
