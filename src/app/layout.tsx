@@ -14,6 +14,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ClerkProvider>{children}</ClerkProvider>
+        <audio autoPlay loop src="/Calm Instrumental Music.mp3" />
       </body>
     </html>
   );
