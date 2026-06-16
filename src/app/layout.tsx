@@ -14,13 +14,18 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ClerkProvider>{children}</ClerkProvider>
-        <audio id="bg-music" loop src="/Calm Instrumental Music.mp3" />
-        <script dangerouslySetInnerHTML={{__html: `
-          document.addEventListener('click', function() {
-            var audio = document.getElementById('bg-music');
-            if (audio && audio.paused) audio.play();
-          }, { once: true });
-        `}} />
+        <audio
+          src="/Calm Instrumental Music.mp3"
+          autoPlay
+          loop
+          controls
+          style={{
+            position: "fixed",
+            bottom: "1rem",
+            right: "1rem",
+            zIndex: 9999,
+          }}
+        />
       </body>
     </html>
   );
