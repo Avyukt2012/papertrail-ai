@@ -15,8 +15,8 @@ export default function RootLayout({
       <body>
         <ClerkProvider>{children}</ClerkProvider>
         <audio
+          id="bg-music"
           src="/Calm Instrumental Music.mp3"
-          autoPlay
           loop
           controls
           style={{
